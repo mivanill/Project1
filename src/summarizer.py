@@ -9,11 +9,16 @@ def build_overview_stats(df, anomalies):
 
 
 def build_executive_summary(stats, anomalies):
-    return f"Detected {stats['anomalies_detected']} anomalies מתוך {stats['total_tickets']} טיקטים."
+    return (
+        f"Detected {stats['anomalies_detected']} anomalies "
+        f"out of {stats['total_tickets']} tickets."
+    )
 
 
 def generate_systemic_issue_notes(anomalies):
     if anomalies.empty:
-        return ["No major issues detected"]
+        return ["No major issues detected."]
 
-    return ["Potential recurring issues detected based on volume and categories"]
+    return [
+        "Potential recurring issues were detected based on volume and category patterns."
+    ]

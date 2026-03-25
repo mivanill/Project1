@@ -20,7 +20,7 @@ st.caption("V1 demo: detect repeated issues and possible systemic anomalies from
 uploaded_file = st.file_uploader("Upload ticket file", type=["xlsx", "csv"])
 
 if uploaded_file is None:
-    st.info("Upload an Excel or CSV file to begin. A sample CSV file is included in data/sample_tickets.csv.")
+    st.info("Upload an Excel or CSV file to begin.")
     st.stop()
 
 try:
@@ -66,7 +66,6 @@ else:
     st.dataframe(anomalies_df, use_container_width=True)
 
     high_severity = anomalies_df[anomalies_df["severity"] == "high"]
-    repeated_issues = anomalies_df[anomalies_df["anomaly_type"] == "repeated_similar_issue"]
 
     st.subheader("High Severity Findings")
     if high_severity.empty:
@@ -78,12 +77,6 @@ else:
                 f"{row['description']}  \n"
                 f"Impact Score: {row['impact_score']} | Confidence: {row['confidence']}"
             )
-
-    st.subheader("Repeated Issue Patterns")
-    if repeated_issues.empty:
-        st.write("No repeated similar issue clusters found.")
-    else:
-        st.dataframe(repeated_issues, use_container_width=True)
 
 st.subheader("Possible Systemic Problem Indicators")
 for note in notes:
