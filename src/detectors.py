@@ -1,9 +1,11 @@
 import pandas as pd
+from src.similarity import find_similar_groups
 
 
 def run_all_detectors(df):
     results = []
 
+    # Volume spike detection
     daily = df.groupby("opened_date").size().reset_index(name="count")
     avg = daily["count"].mean() if not daily.empty else 0
 
@@ -20,6 +22,7 @@ def run_all_detectors(df):
             "confidence": "high",
         })
 
+    # Category concentration detection
     cat_counts = df["category"].value_counts()
 
     for cat, count in cat_counts.items():
@@ -33,6 +36,23 @@ def run_all_detectors(df):
                 "impact_score": 65,
                 "confidence": "medium",
             })
+
+    # Repeated similar issue detection
+    groups = find_similar_groups(df)
+
+    for group in groups:
+        sample_text = df.iloc[group[0]]["short_description"]
+        count = len(group)
+
+        results.append({
+            "anomaly_type": "repeated_similar_issue",
+            "title": "Repeated similar issue detected",
+            "description": f"{count} similar tickets: '{sample_text}'",
+            "count": count,
+            "severity": "high",
+            "impact_score": min(100, 50 + count * 5),
+            "confidence": "high",
+        })
 
     if not results:
         return pd.DataFrame(columns=[
