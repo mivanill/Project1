@@ -4,7 +4,7 @@ import plotly.express as px
 import streamlit as st
 
 from src.cleaner import clean_tickets
-from src.detectors import group_systemic_incidents, run_all_detectors
+from src.detectors import correlate_incidents, group_systemic_incidents, run_all_detectors
 from src.loader import load_table, normalize_column_names, validate_columns
 from src.summarizer import (
     build_executive_summary,
@@ -35,6 +35,7 @@ try:
     df = clean_tickets(raw_df)
     anomalies_df = run_all_detectors(df)
     grouped_incidents = group_systemic_incidents(anomalies_df)
+    correlated_incidents = correlate_incidents(anomalies_df)
     stats = build_overview_stats(df, anomalies_df)
     executive_summary = build_executive_summary(stats, anomalies_df)
     notes = generate_systemic_issue_notes(anomalies_df)
@@ -104,6 +105,26 @@ else:
         )
         st.write(f"Top Issue: {row['top_issue']}")
         st.caption(row["interpretation"])
+
+st.subheader("Correlated Incidents")
+if correlated_incidents.empty:
+    st.write("No correlated incidents inferred from the current anomaly signals.")
+else:
+    display_incidents = correlated_incidents.copy()
+    display_incidents["signals"] = display_incidents["signals"].apply(
+        lambda values: ", ".join(values) if isinstance(values, list) else str(values)
+    )
+
+    st.dataframe(
+        display_incidents[["system", "confidence", "signals", "summary"]],
+        use_container_width=True,
+    )
+
+    for _, row in correlated_incidents.iterrows():
+        st.markdown(f"**System:** {row['system']}")
+        st.write(f"Confidence: {row['confidence']}")
+        st.write(f"Signals: {', '.join(row['signals']) if row['signals'] else 'limited signal'}")
+        st.caption(row["summary"])
 
 st.subheader("Recommended Checks")
 if anomalies_df.empty:

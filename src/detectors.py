@@ -133,3 +133,74 @@ def group_systemic_incidents(anomalies_df):
         kind="mergesort",
     ).reset_index(drop=True)
     return grouped_df
+
+
+def correlate_incidents(anomalies_df):
+    columns = [
+        "system",
+        "incident_type",
+        "confidence",
+        "signals",
+        "total_impact_score",
+        "summary",
+    ]
+
+    if anomalies_df is None or anomalies_df.empty:
+        return pd.DataFrame(columns=columns)
+
+    signal_labels = {
+        "repeated_similar_issue": "repeated_similar_issue",
+        "volume_spike": "volume_spike",
+        "category": "category",
+    }
+
+    incidents = []
+
+    for possible_system, group in anomalies_df.groupby("possible_system", dropna=False):
+        unique_signals = []
+        for anomaly_type in group["anomaly_type"].tolist():
+            signal = signal_labels.get(anomaly_type)
+            if signal and signal not in unique_signals:
+                unique_signals.append(signal)
+
+        signal_count = len(unique_signals)
+
+        if signal_count >= 3:
+            confidence = "high"
+            incident_type = "Probable Outage"
+        elif signal_count == 2:
+            confidence = "medium"
+            incident_type = "Probable Service Degradation"
+        else:
+            confidence = "low"
+            incident_type = "Emerging Issue"
+
+        total_impact_score = int(group["impact_score"].sum())
+        top_row = group.sort_values(
+            by=["impact_score", "count", "title"],
+            ascending=[False, False, True],
+            kind="mergesort",
+        ).iloc[0]
+
+        signals_text = ", ".join(unique_signals) if unique_signals else "limited signal"
+        summary = (
+            f"{incident_type} inferred for {possible_system} based on {signals_text}. "
+            f"Primary indicator: {top_row['title']}."
+        )
+
+        incidents.append({
+            "system": possible_system,
+            "incident_type": incident_type,
+            "confidence": confidence,
+            "signals": unique_signals,
+            "total_impact_score": total_impact_score,
+            "summary": summary,
+        })
+
+    incidents_df = pd.DataFrame(incidents)
+    incidents_df = incidents_df.sort_values(
+        by=["total_impact_score", "system"],
+        ascending=[False, True],
+        kind="mergesort",
+    ).reset_index(drop=True)
+    return incidents_df
