@@ -5,11 +5,12 @@ import streamlit as st
 
 from src.loader import load_table, normalize_column_names, validate_columns
 from src.cleaner import clean_tickets
-from src.detectors import run_all_detectors
+from src.detectors import run_all_detectors, group_systemic_incidents
 from src.summarizer import (
     build_executive_summary,
     build_overview_stats,
     generate_systemic_issue_notes,
+    generate_systemic_incident_explanations,
 )
 
 st.set_page_config(page_title="Ticket Anomaly Agent", layout="wide")
@@ -37,6 +38,9 @@ try:
     stats = build_overview_stats(df, anomalies_df)
     executive_summary = build_executive_summary(stats, anomalies_df)
     notes = generate_systemic_issue_notes(anomalies_df)
+    # New: group and explain likely systemic incidents
+    grouped_incidents = group_systemic_incidents(anomalies_df, system_col="assignment_group")
+    systemic_explanations = generate_systemic_incident_explanations(grouped_incidents)
 
 except Exception as exc:
     st.exception(exc)
@@ -78,6 +82,19 @@ else:
                 f"Impact Score: {row['impact_score']} | Confidence: {row['confidence']}"
             )
 
+
+# New section: Likely Systemic Incidents
+st.subheader("Likely Systemic Incidents")
+if grouped_incidents is not None and not grouped_incidents.empty:
+    for idx, row in grouped_incidents.iterrows():
+        st.markdown(f"**System:** {row['possible_system']}  ")
+        st.markdown(f"Impact Score: {row['total_impact_score']} | Anomaly Count: {row['count']}")
+        st.markdown(f"_Example:_ {row['sample_title']} — {row['sample_description']}")
+        st.info(systemic_explanations[idx])
+else:
+    st.write("No likely systemic incidents detected.")
+
+# Keep previous notes section for context
 st.subheader("Possible Systemic Problem Indicators")
 for note in notes:
     st.write(f"- {note}")
