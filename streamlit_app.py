@@ -3,20 +3,19 @@ from __future__ import annotations
 import plotly.express as px
 import streamlit as st
 
-from src.loader import load_table, normalize_column_names, validate_columns
 from src.cleaner import clean_tickets
-from src.detectors import run_all_detectors, group_systemic_incidents
+from src.detectors import group_systemic_incidents, run_all_detectors
+from src.loader import load_table, normalize_column_names, validate_columns
 from src.summarizer import (
     build_executive_summary,
     build_overview_stats,
     generate_systemic_issue_notes,
-    generate_systemic_incident_explanations,
 )
 
 st.set_page_config(page_title="Ticket Anomaly Agent", layout="wide")
 
 st.title("Ticket Anomaly Agent")
-st.caption("V1 demo: detect repeated issues and possible systemic anomalies from ticket exports.")
+st.caption("Analyze ticket exports for anomaly patterns, likely affected systems, and follow-up checks.")
 
 uploaded_file = st.file_uploader("Upload ticket file", type=["xlsx", "csv"])
 
@@ -35,12 +34,10 @@ try:
 
     df = clean_tickets(raw_df)
     anomalies_df = run_all_detectors(df)
+    grouped_incidents = group_systemic_incidents(anomalies_df)
     stats = build_overview_stats(df, anomalies_df)
     executive_summary = build_executive_summary(stats, anomalies_df)
     notes = generate_systemic_issue_notes(anomalies_df)
-    # New: group and explain likely systemic incidents
-    grouped_incidents = group_systemic_incidents(anomalies_df, system_col="assignment_group")
-    systemic_explanations = generate_systemic_incident_explanations(grouped_incidents)
 
 except Exception as exc:
     st.exception(exc)
@@ -65,13 +62,24 @@ st.plotly_chart(fig, use_container_width=True)
 
 st.subheader("Detected Anomalies")
 if anomalies_df.empty:
-    st.success("No anomalies detected under the current V1 rules.")
+    st.success("No anomalies detected under the current analysis rules.")
 else:
-    st.dataframe(anomalies_df, use_container_width=True)
-
-    high_severity = anomalies_df[anomalies_df["severity"] == "high"]
+    display_columns = [
+        "anomaly_type",
+        "title",
+        "description",
+        "possible_system",
+        "recommended_check",
+        "interpretation",
+        "confidence",
+        "count",
+        "impact_score",
+        "severity",
+    ]
+    st.dataframe(anomalies_df[display_columns], use_container_width=True)
 
     st.subheader("High Severity Findings")
+    high_severity = anomalies_df[anomalies_df["severity"] == "high"]
     if high_severity.empty:
         st.write("No high severity findings.")
     else:
@@ -79,22 +87,37 @@ else:
             st.warning(
                 f"**{row['title']}**  \n"
                 f"{row['description']}  \n"
+                f"System: {row['possible_system']}  \n"
+                f"Recommended Check: {row['recommended_check']}  \n"
+                f"Interpretation: {row['interpretation']}  \n"
                 f"Impact Score: {row['impact_score']} | Confidence: {row['confidence']}"
             )
 
-
-# New section: Likely Systemic Incidents
 st.subheader("Likely Systemic Incidents")
-if grouped_incidents is not None and not grouped_incidents.empty:
-    for idx, row in grouped_incidents.iterrows():
-        st.markdown(f"**System:** {row['possible_system']}  ")
-        st.markdown(f"Impact Score: {row['total_impact_score']} | Anomaly Count: {row['count']}")
-        st.markdown(f"_Example:_ {row['sample_title']} — {row['sample_description']}")
-        st.info(systemic_explanations[idx])
-else:
+if grouped_incidents.empty:
     st.write("No likely systemic incidents detected.")
+else:
+    for _, row in grouped_incidents.iterrows():
+        st.markdown(f"**System:** {row['possible_system']}")
+        st.write(
+            f"Total Impact: {row['total_impact_score']} | Occurrence Count: {row['count']}"
+        )
+        st.write(f"Top Issue: {row['top_issue']}")
+        st.caption(row["interpretation"])
 
-# Keep previous notes section for context
+st.subheader("Recommended Checks")
+if anomalies_df.empty:
+    st.write("No recommended checks to display.")
+else:
+    recommended_checks = (
+        anomalies_df[["possible_system", "recommended_check"]]
+        .drop_duplicates()
+        .sort_values(by=["possible_system", "recommended_check"], kind="mergesort")
+    )
+    for _, row in recommended_checks.iterrows():
+        st.markdown(f"**{row['possible_system']}**")
+        st.write(row["recommended_check"])
+
 st.subheader("Possible Systemic Problem Indicators")
 for note in notes:
     st.write(f"- {note}")
